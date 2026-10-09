@@ -1,0 +1,83 @@
+Lambda py function to sort files 
+by first 10 digits and place into folders automatically
+
+import boto3
+import re
+import urllib.parse
+
+s3 = boto3.client('s3')
+
+BUCKET_NAME = "mineola-policerecordings"
+
+def lambda_handler(event, context):
+    # If triggered by S3 event (new uploads)
+    if 'Records' in event:
+        for record in event['Records']:
+            key = urllib.parse.unquote_plus(record['s3']['object']['key'])
+            process_file(key)
+    else:
+        # Manual invocation: process EVERYTHING already in bucket
+        process_all_files()
+
+def process_all_files():
+    paginator = s3.get_paginator('list_objects_v2')
+
+    for page in paginator.paginate(Bucket=BUCKET_NAME):
+        for obj in page.get('Contents', []):
+            key = obj['Key']
+            process_file(key)
+
+def process_file(key):
+    # Skip "folders" and already-organized files
+    if key.endswith('/') or is_already_sorted(key):
+        return
+
+    filename = key.split('/')[-1]
+
+    # Extract first 10 digits from filename
+    match = re.match(r'^(\d{10})', filename)
+
+    if not match:
+        print(f"Skipping {filename} (no 10-digit prefix)")
+        return
+
+    folder = match.group(1)
+    new_key = f"{folder}/{filename}"
+
+    # Avoid unnecessary copy if already correct
+    if key == new_key:
+        return
+
+    print(f"Moving {key} -> {new_key}")
+
+    # Copy to new location
+    s3.copy_object(
+        Bucket=BUCKET_NAME,
+        CopySource={'Bucket': BUCKET_NAME, 'Key': key},
+        Key=new_key
+    )
+
+    # Delete original
+    s3.delete_object(
+        Bucket=BUCKET_NAME,
+        Key=key
+    )
+
+def is_already_sorted(key):
+    """
+    Check if file is already inside a folder that matches its prefix
+    Example: 1234567890/file.wav
+    """
+    parts = key.split('/')
+    
+    if len(parts) < 2:
+        return False
+
+    folder = parts[0]
+    filename = parts[-1]
+
+    match = re.match(r'^(\d{10})', filename)
+    if not match:
+        return True  # treat as "do nothing"
+
+    return folder == match.group(1)

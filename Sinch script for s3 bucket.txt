@@ -1,0 +1,9 @@
+Sinch script for s3 bucket
+
+{
+  "recordingOptions": {
+    "destinationUrl": "s3://mineola-policerecordings/mineola-dispatch1recordings/",
+    "credentials": "AKIAQKSCLITVJSD2B:iw5ptqud/wKvgyfgnQ/ceFy/mo019v/yxEa5bfjj:us-east-1",
+    "notificationEvents": true
+  }
+}
